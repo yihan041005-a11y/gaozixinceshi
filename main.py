@@ -91,7 +91,7 @@ with st.container():
     st.markdown('<div class="fixed-footer">', unsafe_allow_html=True)
     col_sel, col_btn = st.columns([4, 1])
 
-    options = ["请点击选择一个安全问题进行咨询..."] + list(SPECIFIC_RESPONSES.keys())
+    options = ["请点击选择一个问题进行咨询..."] + list(SPECIFIC_RESPONSES.keys())
     selected_option = col_sel.selectbox("Q", options, label_visibility="collapsed")
     send_trigger = col_btn.button("发送", use_container_width=True, type="primary")
     st.markdown('</div>', unsafe_allow_html=True)
