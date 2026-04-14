@@ -97,7 +97,7 @@ with st.container():
     st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 6. 交互逻辑 ---
-if send_trigger and selected_option != "请点击选择一个安全问题进行咨询...":
+if send_trigger and selected_option != "请点击选择一个问题进行咨询...":
     st.session_state.messages.append({"role": "user", "content": selected_option})
 
     answer_text = SPECIFIC_RESPONSES[selected_option]
