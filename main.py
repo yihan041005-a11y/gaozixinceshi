@@ -4,13 +4,13 @@ from elevenlabs import VoiceSettings
 import base64
 
 # ========================================================
-# 实验员控制台 - 特定问答 & ElevenLabs V3 优化版
+# 实验员控制台 - 语音条播放版
 # ========================================================
 VOICE_ID = "MpFj36VyP4TvI7fd8mQA"
-MODEL_ID = "eleven_v3"  # 使用最新的 V3 级别模型
+MODEL_ID = "eleven_v3" 
 STABILITY_VAL = 0.85
 
-# API 配置
+# API 配置 (提醒：生产环境建议使用环境变量)
 DEEPSEEK_API_KEY = "sk-46f5736e30f544288284d6b7d7641393"
 ELEVENLABS_API_KEY = "sk_57e57c67990c2b1a1a5b44c018cf81b0564cc1cc777b7de8"
 
@@ -18,7 +18,7 @@ client_el = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
 # --- 1. 特定问题与答案映射 ---
 SPECIFIC_RESPONSES = {
-     "朗读《红楼梦》的书评":
+    "朗读《红楼梦》的书评":
         "《红楼梦》不仅是一部描写封建家族衰落的小说，更是一部关于生命幻灭与悲剧美学的史诗。作者曹雪芹通过复杂的意象和精妙的谶语，勾勒出了一个大观园式的理想国。这种从繁华到荒凉的剧烈转变揭示了传统社会中人性与礼教之间不可调和的矛盾。",
 
     "朗读《三国演义》的书评":
@@ -30,7 +30,6 @@ SPECIFIC_RESPONSES = {
     "朗读《水浒传》的书评":
         "《水浒传》是施耐庵创作的中国四大名著之一。讲述了108位梁山好汉反抗腐败官府、为民除暴的传奇故事。全书人物众多,每个角色都有鲜明的个性和背景,如忠诚勇敢的宋江、义气深重的武松、深藏不露的林冲等。这些英雄虽为反叛者，但他们的行为常常暴力且复杂，体现了人性的多面性。"
 }
-
 # --- 2. 界面样式定制 ---
 st.set_page_config(page_title="AI语音交互系统", layout="centered")
 
@@ -50,43 +49,30 @@ st.markdown("""
         background-color: #f7f7f7; padding: 20px;
         border-top: 1px solid #dcdcdc; z-index: 1000;
     }
-    /* 隐藏 HTML 默认播放器 */
-    audio { display: none; }
+    /* 优化语音条宽度，使其更像聊天气泡里的组件 */
+    section.main audio {
+        width: 100%;
+        max-width: 300px;
+        height: 40px;
+    }
     </style>
     <div class="fixed-header">AI语音交互系统</div>
     """, unsafe_allow_html=True)
 
-
-# --- 3. 自动播放函数 ---
-def autoplay_audio(audio_bytes, msg_index):
-    b64 = base64.b64encode(audio_bytes).decode()
-    audio_html = f"""
-        <audio id="audio_{msg_index}" autoplay>
-            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-        </audio>
-        <script>
-            var audio = document.getElementById('audio_{msg_index}');
-            audio.currentTime = 0;
-            audio.play();
-        </script>
-    """
-    st.components.v1.html(audio_html, height=0)
-
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- 4. 渲染聊天历史 ---
+# --- 3. 渲染聊天历史 ---
 st.markdown('<div class="chat-container">', unsafe_allow_html=True)
 for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
+        # 如果消息中有语音数据，则渲染语音条
         if "audio" in msg:
-            if st.button(f"🔊 重复播放", key=f"repeat_{i}"):
-                autoplay_audio(msg["audio"], i)
+            st.audio(msg["audio"], format="audio/mp3")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 5. 底部输入区 ---
+# --- 4. 底部输入区 ---
 with st.container():
     st.markdown('<div class="fixed-footer">', unsafe_allow_html=True)
     col_sel, col_btn = st.columns([4, 1])
@@ -96,14 +82,15 @@ with st.container():
     send_trigger = col_btn.button("发送", use_container_width=True, type="primary")
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 6. 交互逻辑 ---
+# --- 5. 交互逻辑 ---
 if send_trigger and selected_option != "请点击选择一个问题进行咨询...":
+    # 记录用户消息
     st.session_state.messages.append({"role": "user", "content": selected_option})
 
     answer_text = SPECIFIC_RESPONSES[selected_option]
 
     try:
-        with st.spinner("专家正在思考并生成语音..."):
+        with st.spinner("正在生成语音..."):
             audio_gen = client_el.text_to_speech.convert(
                 voice_id=VOICE_ID,
                 text=answer_text,
@@ -116,16 +103,14 @@ if send_trigger and selected_option != "请点击选择一个问题进行咨询.
             )
             audio_bytes = b"".join(list(audio_gen))
 
+            # 记录助手消息和语音字节
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": answer_text,
                 "audio": audio_bytes
             })
+            # 刷新页面以显示新消息
             st.rerun()
+            
     except Exception as e:
         st.error(f"语音生成出错: {str(e)}")
-
-# 自动播放最后一条生成的语音
-if st.session_state.messages and st.session_state.messages[-1]["role"] == "assistant":
-    last_idx = len(st.session_state.messages) - 1
-    autoplay_audio(st.session_state.messages[-1]["audio"], last_idx)
