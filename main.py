@@ -24,214 +24,234 @@ SPECIFIC_RESPONSES = {
         "《水浒传》是施耐庵创作的中国四大名著之一。讲述了108位梁山好汉反抗腐败官府、为民除暴的传奇故事。全书人物众多,每个角色都有鲜明的个性和背景,如忠诚勇敢的宋江、义气深重的武松、深藏不露的林冲等。",
 }
 
-# ── 读取背景图并转为 base64 ────────────────────────────────
-def get_bg_base64(image_path: str) -> str:
-    with open(image_path, "rb") as f:
-        data = base64.b64encode(f.read()).decode()
-    return data
+# ── 读取 Banner 图片 ──────────────────────────────────────
+def get_img_base64(path: str) -> str:
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
 
-# ⚠️ 把图片放在与 app.py 同一目录，文件名改短
-BG_BASE64 = get_bg_base64("bg.png")
+try:
+    BANNER_B64 = get_img_base64("banner.png")
+    BANNER_SRC = f"data:image/png;base64,{BANNER_B64}"
+except:
+    BANNER_SRC = ""
 
 # ── 页面配置 ──────────────────────────────────────────────
-st.set_page_config(page_title="生成式 AI 声音研究", layout="centered")
+st.set_page_config(page_title="AI语音交互系统", layout="centered", initial_sidebar_state="collapsed")
 
+# ── 核心 CSS：严格锁定视口与高度 ────────────────────────
 st.markdown(f"""
 <style>
-/* ── 全局背景 ── */
-.stApp {{
-    background-image: url("data:image/png;base64,{BG_BASE64}");
-    background-size: cover;
-    background-position: center top;
-    background-attachment: fixed;
-    font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
+/* 1. 强制锁死页面整体滚动，启用手机动态视口 100dvh */
+html, body, [data-testid="stAppViewContainer"], .main {{
+    height: 100dvh !important;
+    width: 100vw !important;
+    overflow: hidden !important; 
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: #050d1a !important;
+    font-family: -apple-system, 'PingFang SC', sans-serif;
 }}
 
-/* 背景加深色蒙版，保证文字可读 */
-.stApp::before {{
+/* 隐藏 Streamlit 默认头部和所有内边距 */
+header[data-testid="stHeader"] {{ display: none !important; }}
+.block-container {{ padding: 0 !important; max-width: 100% !important; }}
+[data-testid="stChatMessage"] {{ display: none !important; }}
+
+/* ── 背景网格 ── */
+.stApp::after {{
     content: "";
-    position: fixed;
-    inset: 0;
-    background: rgba(10, 18, 14, 0.55);
-    z-index: 0;
-    pointer-events: none;
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+        linear-gradient(rgba(40,90,200,0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(40,90,200,0.10) 1px, transparent 1px);
+    background-size: 50px 50px;
 }}
 
-/* 所有内容层级在蒙版之上 */
-.stApp > * {{ position: relative; z-index: 1; }}
+/* ================== 四大模块固定布局 ================== */
 
-header {{ visibility: hidden; }}
-
-/* ── 固定顶部标题栏 ── */
+/* 1. 固定顶栏 (Top Bar) */
 .fixed-header {{
-    position: fixed; top: 0; left: 0; width: 100%;
-    background: rgba(10, 22, 16, 0.75);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 0.5px solid rgba(80, 200, 140, 0.25);
-    padding: 12px 16px 10px;
-    display: flex; align-items: center; gap: 10px;
+    position: fixed; top: 0; left: 0; width: 100%; height: 54px;
+    background: rgba(5,13,26,0.95);
+    backdrop-filter: blur(14px);
+    border-bottom: 0.5px solid rgba(60,120,255,0.15);
+    display: flex; align-items: center; gap: 10px; padding: 0 16px;
     z-index: 1000;
 }}
 .header-icon {{
-    width: 32px; height: 32px; border-radius: 10px;
-    background: rgba(46, 139, 106, 0.3);
-    border: 0.5px solid rgba(80, 200, 140, 0.4);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 15px; flex-shrink: 0;
+    width: 30px; height: 30px; border-radius: 8px;
+    background: rgba(30,70,200,0.25); border: 0.5px solid rgba(80,140,255,0.3);
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
 }}
-.header-title {{ font-size: 14px; font-weight: 500; color: #e8f5ee; }}
-.header-sub {{ font-size: 10px; color: rgba(180,220,200,0.6); margin-top: 1px; }}
+.header-title {{ font-size: 14px; font-weight: 500; color: #c8deff; }}
+.header-sub {{ font-size: 10px; color: rgba(120,170,255,0.45); margin-top: 1px; }}
 
-/* ── 聊天内容区 ── */
-.chat-outer {{ padding-top: 68px; padding-bottom: 108px; }}
+/* 2. 固定 Banner (紧接顶栏下方) */
+.banner-wrap {{
+    position: fixed; top: 54px; left: 0; width: 100%; height: 160px;
+    z-index: 900; background: #0a1428; overflow: hidden;
+}}
+.banner-wrap img {{
+    width: 100%; height: 100%; object-fit: cover; object-position: center 30%;
+}}
+.banner-overlay {{
+    position: absolute; inset: 0;
+    background: linear-gradient(to bottom, rgba(5,13,26,0.1) 0%, rgba(5,13,26,0.7) 100%);
+}}
+.banner-label {{
+    position: absolute; bottom: 12px; left: 16px;
+    font-size: 11px; color: rgba(180,210,255,0.7); letter-spacing: 1px;
+}}
 
-/* ── 用户气泡 ── */
+/* 3. 中间对话滚动窗口 (自动填满中间区域，仅内部滚动) */
+.chat-scroll-wrap {{
+    position: fixed; 
+    top: 214px; 
+    bottom: 105px; /* 【修改点】预留更多底部空间给增高的发送栏 */
+    left: 0; width: 100%;
+    overflow-y: auto; overflow-x: hidden;
+    padding: 16px 14px; z-index: 800;
+    display: flex; flex-direction: column; gap: 14px;
+    scrollbar-width: none; 
+}}
+.chat-scroll-wrap::-webkit-scrollbar {{ display: none; }}
+
+/* 4. 固定底部控制器 (拦截Streamlit布局，直接固定在底部) */
+div[data-testid="stHorizontalBlock"] {{
+    position: fixed; bottom: 0; left: 0; width: 100%; 
+    height: 105px; /* 【修改点】增加整体高度 */
+    padding: 10px 14px 28px 14px; /* 【修改点】增加底部Padding(28px)，把控件往上顶，避开手机底部黑条 */
+    background: rgba(5,12,28,0.98); z-index: 1000;
+    border-top: 0.5px solid rgba(60,120,255,0.2);
+    display: flex; align-items: center; gap: 10px;
+}}
+
+/* ── 样式细节定制 ── */
+.bubble-user-wrap {{ display: flex; justify-content: flex-end; }}
 .bubble-user {{
-    background: rgba(46, 139, 106, 0.85);
-    color: #e8f5ee;
-    border: 0.5px solid rgba(80, 200, 140, 0.4);
-    border-radius: 16px 16px 4px 16px;
-    padding: 10px 14px;
-    max-width: 80%;
-    font-size: 14px; line-height: 1.6;
-    margin-left: auto; margin-bottom: 12px;
-    display: table;
-    backdrop-filter: blur(6px);
+    background: rgba(30,65,190,0.80); color: #d8e8ff;
+    border-radius: 18px 18px 4px 18px; padding: 11px 15px;
+    max-width: 82%; font-size: 14px; line-height: 1.6;
+}}
+.bubble-ai-wrap {{ display: flex; align-items: flex-start; gap: 10px; }}
+.ai-dot {{
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(20,50,140,0.5); border: 0.5px solid rgba(80,130,255,0.25);
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+}}
+.bubble-ai-content {{ flex: 1; }}
+.bubble-ai {{ color: #c0d8ff; font-size: 14px; line-height: 1.7; }}
+audio {{
+    width: 100%; max-width: 260px; height: 34px; margin-top: 8px; border-radius: 8px;
+    filter: invert(0.85) hue-rotate(195deg) saturate(1.2); outline: none;
 }}
 
-/* ── AI 气泡 ── */
-.bubble-ai-wrap {{
-    display: flex; align-items: flex-start;
-    gap: 8px; margin-bottom: 12px;
-}}
-.ai-avatar {{
-    width: 30px; height: 30px; border-radius: 50%;
-    background: rgba(46, 139, 106, 0.25);
-    border: 0.5px solid rgba(80, 200, 140, 0.35);
-    flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
-}}
-.bubble-ai {{
-    background: rgba(15, 28, 20, 0.72);
-    border: 0.5px solid rgba(80, 200, 140, 0.2);
-    border-radius: 4px 16px 16px 16px;
-    padding: 10px 14px;
-    max-width: 80%;
-    font-size: 14px; line-height: 1.7; color: #d4ede2;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-}}
-
-/* ── 音频播放器 ── */
-section.main audio {{
-    width: 100%;
-    max-width: 280px;
-    height: 36px;
-    margin-top: 8px;
-    border-radius: 10px;
-    filter: invert(0.85) hue-rotate(100deg);
-}}
-
-/* ── 固定底部控制栏 ── */
-.fixed-footer {{
-    position: fixed; bottom: 0; left: 0; width: 100%;
-    background: rgba(10, 22, 16, 0.80);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-top: 0.5px solid rgba(80, 200, 140, 0.2);
-    padding: 10px 16px 20px;
-    z-index: 1000;
-}}
-.footer-hint {{
-    font-size: 11px; color: rgba(160, 210, 180, 0.6);
-    margin-bottom: 7px;
-}}
-
-/* ── 下拉框 ── */
+/* 优化下拉框与按钮UI以适配底栏 */
 div[data-baseweb="select"] > div {{
-    border-radius: 10px !important;
-    border-color: rgba(80, 200, 140, 0.3) !important;
-    background: rgba(15, 30, 20, 0.7) !important;
-    color: #c8e8d8 !important;
-    font-size: 13px !important;
-    min-height: 38px !important;
+    background: rgba(10,22,60,0.70) !important;
+    border-color: rgba(60,120,255,0.3) !important; border-radius: 9px !important;
 }}
-div[data-baseweb="select"] span {{
-    color: #c8e8d8 !important;
+/* 【修改点】强制下拉框内的文字（包括选中项和箭头）变成白色 */
+div[data-baseweb="select"] span, 
+div[data-baseweb="select"] div {{ 
+    color: #ffffff !important; 
+    font-size: 13px !important; 
 }}
 
-/* ── 发送按钮 ── */
 .stButton > button {{
-    background: rgba(46, 139, 106, 0.9) !important;
-    color: #e8f5ee !important;
-    border: 0.5px solid rgba(80, 200, 140, 0.5) !important;
-    border-radius: 10px !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
-    height: 38px;
-    padding: 0 16px !important;
-    backdrop-filter: blur(6px);
+    background: rgba(25,65,200,0.85) !important; color: #ffffff !important;
+    border: 0.5px solid rgba(80,140,255,0.4) !important; border-radius: 9px !important;
+    height: 42px !important; font-size: 14px !important; font-weight: 500 !important;
 }}
-.stButton > button:hover {{
-    background: rgba(29, 110, 80, 0.95) !important;
-}}
-</style>
 
-<div class="fixed-header">
-    <div class="header-icon">🎙️</div>
-    <div>
-        <div class="header-title">生成式 AI 声音研究</div>
-        <div class="header-sub">Generative Voice Study</div>
-    </div>
-</div>
+/* 加载动画绝对居中 */
+div[data-testid="stSpinner"] {{
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 9999; background: rgba(5,13,26,0.9); padding: 25px 40px; 
+    border-radius: 12px; border: 1px solid rgba(60,120,255,0.3);
+}}
+div[data-testid="stSpinner"] span, div[data-testid="stSpinner"] p {{ color: white !important; font-size:15px; }}
+</style>
 """, unsafe_allow_html=True)
 
 # ── Session State ──────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# ── 渲染聊天历史 ──────────────────────────────────────────
-st.markdown('<div class="chat-outer">', unsafe_allow_html=True)
+# ================== 页面渲染 ==================
 
-for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        st.markdown(
-            f'<div class="bubble-user">{msg["content"]}</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f'<div class="bubble-ai-wrap">'
-            f'<div class="ai-avatar">🤖</div>'
-            f'<div class="bubble-ai">{msg["content"]}</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        if "audio" in msg:
-            st.audio(msg["audio"], format="audio/mp3")
+# 1 & 2. 渲染固定的顶栏与 Banner
+banner_html = f'<img src="{BANNER_SRC}"/>' if BANNER_SRC else '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:white;">Banner 未找到</div>'
 
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown(f"""
+<div class="fixed-header">
+    <div class="header-icon">🎙️</div>
+    <div>
+        <div class="header-title">AI 语音交互系统</div>
+        <div class="header-sub">Generative Voice Study</div>
+    </div>
+</div>
+<div class="banner-wrap">
+    {banner_html}
+    <div class="banner-overlay"></div>
+    <div class="banner-label">Generative AI · Voice Analysis</div>
+</div>
+""", unsafe_allow_html=True)
 
-# ── 底部输入区（原逻辑完全保留）────────────────────────────
-with st.container():
-    st.markdown('<div class="fixed-footer">', unsafe_allow_html=True)
+# 3. 渲染居中滚动的对话窗口
+def get_audio_html(audio_bytes):
+    audio_base64 = base64.b64encode(audio_bytes).decode()
+    return f'<audio controls src="data:audio/mp3;base64,{audio_base64}"></audio>'
 
-    col_sel, col_btn = st.columns([4, 1])
-    options = ["请点击选择一个问题进行咨询..."] + list(SPECIFIC_RESPONSES.keys())
-    selected_option = col_sel.selectbox("Q", options, label_visibility="collapsed")
-    send_trigger = col_btn.button("发送", use_container_width=True, type="primary")
+chat_content = '<div class="chat-scroll-wrap" id="chatWrap">'
+if not st.session_state.messages:
+    chat_content += """
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;opacity:0.4;">
+        <span style="font-size:13px;color:#c0d8ff;">请在底部选择问题发送</span>
+    </div>
+    """
+else:
+    for msg in st.session_state.messages:
+        if msg["role"] == "user":
+            chat_content += f'<div class="bubble-user-wrap"><div class="bubble-user">{msg["content"]}</div></div>'
+        else:
+            audio_tag = get_audio_html(msg["audio"]) if "audio" in msg else ""
+            chat_content += f'''
+            <div class="bubble-ai-wrap">
+                <div class="ai-dot">🎙️</div>
+                <div class="bubble-ai-content">
+                    <div class="bubble-ai">{msg["content"]}</div>
+                    {audio_tag}
+                </div>
+            </div>
+            '''
+# 注入自动滚动到最底部的JS（注意这里不能有缩进）
+chat_content += '''
+<script>
+    var chatWrap = window.parent.document.getElementById('chatWrap');
+    if (chatWrap) { chatWrap.scrollTop = chatWrap.scrollHeight; }
+</script>
+</div>
+'''
+st.markdown(chat_content, unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
 
-# ── 交互逻辑（原样保留）──────────────────────────────────
-if send_trigger and selected_option != "请点击选择一个问题进行咨询...":
+# 4. 渲染底部操作栏 (原生的Streamlit组件被CSS锁定在底部)
+options = ["请点击选择一个安全问题进行咨询..."] + list(SPECIFIC_RESPONSES.keys())
+
+col_sel, col_btn = st.columns([3.5, 1], gap="small")
+with col_sel:
+    selected_option = st.selectbox("Q", options, label_visibility="collapsed")
+with col_btn:
+    send_trigger = st.button("发送", use_container_width=True)
+
+# ── 交互逻辑 ──────────────────────────────────
+if send_trigger and selected_option != "请点击选择一个安全问题进行咨询...":
     st.session_state.messages.append({"role": "user", "content": selected_option})
     answer_text = SPECIFIC_RESPONSES[selected_option]
 
     try:
-        with st.spinner("正在生成语音…"):
+        with st.spinner("专家正在思考并生成语音..."):
             audio_gen = client_el.text_to_speech.convert(
                 voice_id=VOICE_ID,
                 text=answer_text,
@@ -239,15 +259,15 @@ if send_trigger and selected_option != "请点击选择一个问题进行咨询.
                 voice_settings=VoiceSettings(
                     stability=STABILITY_VAL,
                     similarity_boost=0.8,
-                    use_speaker_boost=True,
-                ),
+                    use_speaker_boost=True
+                )
             )
             audio_bytes = b"".join(list(audio_gen))
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": answer_text,
-                "audio": audio_bytes,
+                "audio": audio_bytes
             })
             st.rerun()
     except Exception as e:
-        st.error(f"语音生成出错：{str(e)}")
+        st.error(f"语音生成出错: {str(e)}")
