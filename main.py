@@ -237,7 +237,7 @@ st.markdown(chat_content, unsafe_allow_html=True)
 
 
 # 4. 渲染底部操作栏 (原生的Streamlit组件被CSS锁定在底部)
-options = ["请点击选择一个安全问题进行咨询..."] + list(SPECIFIC_RESPONSES.keys())
+options = ["请点击选择一个问题进行咨询..."] + list(SPECIFIC_RESPONSES.keys())
 
 col_sel, col_btn = st.columns([3.5, 1], gap="small")
 with col_sel:
@@ -246,7 +246,7 @@ with col_btn:
     send_trigger = st.button("发送", use_container_width=True)
 
 # ── 交互逻辑 ──────────────────────────────────
-if send_trigger and selected_option != "请点击选择一个安全问题进行咨询...":
+if send_trigger and selected_option != "请点击选择一个问题进行咨询...":
     st.session_state.messages.append({"role": "user", "content": selected_option})
     answer_text = SPECIFIC_RESPONSES[selected_option]
 
